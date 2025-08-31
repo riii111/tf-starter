@@ -7,3 +7,4 @@ module "network" {
   public_subnet_cidrs = var.public_subnet_cidrs
   az_suffixes         = var.az_suffixes
 }
+
