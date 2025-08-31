@@ -1,0 +1,59 @@
+[tools]
+terraform = "1.9.0"
+awscli = "2.15.0"
+tflint = "0.50.0"
+terraform-docs = "latest"
+
+[tasks.hooks-setup]
+description = "Git hooks のセットアップ（lefthook）"
+run = "lefthook install || true"
+
+[tasks.init]
+description = "指定 env/layer で terraform init"
+usage = '''
+arg "env" "環境(dev/prod)" default="dev"
+arg "layer" "レイヤ(e.g. 10-network)"
+'''
+run = """
+d=live/{{arg(name="env")}}/{{arg(name="layer")}}
+if [ -f "$d/backend.tfvars" ]; then
+  terraform -chdir="$d" init -backend-config=backend.tfvars
+else
+  terraform -chdir="$d" init -backend=false
+fi
+"""
+
+[tasks.plan]
+description = "指定 env/layer で terraform plan"
+usage = '''
+arg "env" "環境(dev/prod)" default="dev"
+arg "layer" "レイヤ(e.g. 10-network)"
+'''
+run = 'terraform -chdir=live/{{arg(name="env")}}/{{arg(name="layer")}} plan -var-file=terraform.tfvars'
+
+[tasks.apply]
+description = "指定 env/layer で terraform apply"
+usage = '''
+arg "env" "環境(dev/prod)" default="dev"
+arg "layer" "レイヤ(e.g. 10-network)"
+'''
+run = 'terraform -chdir=live/{{arg(name="env")}}/{{arg(name="layer")}} apply -auto-approve -var-file=terraform.tfvars'
+
+[tasks.fmt]
+description = "コードフォーマット"
+run = "terraform fmt -recursive"
+
+[tasks.lint]
+description = "コード品質チェック"
+run = [
+  "tflint --recursive",
+  "terraform fmt -check -recursive"
+]
+
+[tasks.security-check]
+description = "セキュリティチェック"
+run = "tfsec ."
+
+[tasks.docs]
+description = "モジュール README を terraform-docs で自動生成"
+run = "test -d modules && find modules -name '*.tf' -exec dirname {} \\; | sort -u | xargs -I {} sh -c 'terraform-docs markdown table {} > {}/README.md' || true"

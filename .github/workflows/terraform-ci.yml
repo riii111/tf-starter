@@ -1,0 +1,77 @@
+name: terraform-ci
+
+on:
+  pull_request:
+    paths:
+      - "**/*.tf"
+      - ".tflint.hcl"
+      - ".lefthook.yml"
+      - ".mise.toml"
+      - ".github/workflows/terraform-ci.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "**/*.tf"
+      - ".tflint.hcl"
+      - ".mise.toml"
+
+jobs:
+  lint-validate-plan:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v5
+        with:
+          tflint_version: latest
+
+      - name: TFLint (recursive)
+        run: tflint --recursive
+
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate (each live layer)
+        shell: bash
+        run: |
+          set -e
+          for d in live/*/*; do
+            if [ -f "$d/main.tf" ]; then
+              terraform -chdir="$d" init -backend=false
+              terraform -chdir="$d" validate
+            fi
+          done
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ secrets.AWS_OIDC_ROLE_ARN != '' }}
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ap-northeast-1
+
+      - name: Terraform plan (dev 10-network)
+        if: ${{ secrets.AWS_OIDC_ROLE_ARN != '' }}
+        shell: bash
+        run: |
+          if [ -f live/dev/10-network/main.tf ]; then
+            terraform -chdir=live/dev/10-network plan -no-color -var-file=terraform.tfvars
+          else
+            echo "skip: live/dev/10-network not ready"
+          fi
+
+      - name: Terraform plan (dev 30-apps/sample-api)
+        if: ${{ secrets.AWS_OIDC_ROLE_ARN != '' }}
+        shell: bash
+        run: |
+          if [ -f live/dev/30-apps/sample-api/main.tf ]; then
+            terraform -chdir=live/dev/30-apps/sample-api plan -no-color -var-file=terraform.tfvars
+          else
+            echo "skip: live/dev/30-apps/sample-api not ready"
+          fi

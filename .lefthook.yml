@@ -1,0 +1,23 @@
+pre-commit:
+  parallel: true
+  commands:
+    fmt:
+      run: mise exec -- terraform fmt -recursive
+    tflint:
+      run: mise exec -- tflint --recursive
+    validate:
+      run: |
+        set -e
+        for d in live/*/*; do
+          if [ -f "$d/main.tf" ]; then
+            mise exec -- terraform -chdir="$d" validate
+          fi
+        done
+    docs:
+      run: |
+        set -e
+        if [ -d modules ]; then
+          find modules -name '*.tf' -exec dirname {} \; \
+            | sort -u \
+            | xargs -I {} sh -c 'mise exec -- terraform-docs markdown table {} > {}/README.md'
+        fi
